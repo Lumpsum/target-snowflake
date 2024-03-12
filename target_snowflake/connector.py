@@ -239,7 +239,7 @@ class SnowflakeConnector(SQLConnector):
         # Since we build the ddl manually we can't rely on SQLAlchemy to
         # quote column names automatically.
         return sqlalchemy.DDL(
-            "ALTER TABLE %(table_name)s ALTER COLUMN %(column_name)s SET DATA TYPE %(column_type)s",
+            "ALTER ICEBERG TABLE %(table_name)s ALTER COLUMN %(column_name)s SET DATA TYPE %(column_type)s",
             {
                 "table_name": table_name,
                 "column_name": formatter.format_collation(column_name),
