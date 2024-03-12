@@ -218,6 +218,41 @@ class SnowflakeConnector(SQLConnector):
         )
 
     @staticmethod
+    def get_column_add_ddl(
+        table_name: str,
+        column_name: str,
+        column_type: sqlalchemy.types.TypeEngine,
+    ) -> sqlalchemy.DDL:
+        """Get the create column DDL statement.
+
+        Override this if your database uses a different syntax for creating columns.
+
+        Args:
+            table_name: Fully qualified table name of column to alter.
+            column_name: Column name to create.
+            column_type: New column sqlalchemy type.
+
+        Returns:
+            A sqlalchemy DDL instance.
+        """
+        if isinstance(column_type, sqlalchemy.types.DECIMAL):
+            column_type = sqlalchemy.types.FLOAT()
+
+        create_column_clause = sqlalchemy.schema.CreateColumn(
+            sqlalchemy.Column(
+                column_name,
+                column_type,
+            ),
+        )
+        return sqlalchemy.DDL(
+            "ALTER ICEBERG TABLE %(table_name)s ADD COLUMN %(create_column_clause)s",
+            {
+                "table_name": table_name,
+                "create_column_clause": create_column_clause,
+            },
+        )
+
+    @staticmethod
     def get_column_alter_ddl(
         table_name: str,
         column_name: str,
@@ -392,6 +427,60 @@ class SnowflakeConnector(SQLConnector):
             ),
             {},
         )
+
+    def create_empty_table(
+        self,
+        full_table_name: str,
+        schema: dict,
+        primary_keys: Sequence[str] | None = None,
+        partition_keys: list[str] | None = None,
+        as_temp_table: bool = False,  # noqa: FBT001, FBT002
+    ) -> None:
+        """Create an empty target table.
+
+        Args:
+            full_table_name: the target table name.
+            schema: the JSON schema for the new table.
+            primary_keys: list of key properties.
+            partition_keys: list of partition keys.
+            as_temp_table: True to create a temp table.
+
+        Raises:
+            NotImplementedError: if temp tables are unsupported and as_temp_table=True.
+            RuntimeError: if a variant schema is passed with no properties defined.
+        """
+        if as_temp_table:
+            msg = "Temporary tables are not supported."
+            raise NotImplementedError(msg)
+
+        _ = partition_keys  # Not supported in generic implementation.
+
+        _, schema_name, table_name = self.parse_full_table_name(full_table_name)
+        meta = sqlalchemy.MetaData(schema=schema_name)
+        columns: list[sqlalchemy.Column] = []
+        primary_keys = primary_keys or []
+        try:
+            properties: dict = schema["properties"]
+        except KeyError as e:
+            msg = f"Schema for '{full_table_name}' does not define properties: {schema}"
+            raise RuntimeError(msg) from e
+        for property_name, property_jsonschema in properties.items():
+            is_primary_key = property_name in primary_keys
+
+            column_type = self.to_sql_type(property_jsonschema)
+            if isinstance(column_type, sqlalchemy.types.DECIMAL):
+                column_type = sqlalchemy.types.Float()
+
+            columns.append(
+                sqlalchemy.Column(
+                    property_name,
+                    column_type,
+                    primary_key=is_primary_key,
+                ),
+            )
+
+        _ = sqlalchemy.Table(table_name, meta, *columns, prefixes=["ICEBERG"])
+        meta.create_all(self._engine)
 
     def _get_copy_statement(self, full_table_name, schema, sync_id, file_format):  # noqa: ANN202, ANN001
         """Get Snowflake COPY statement."""
