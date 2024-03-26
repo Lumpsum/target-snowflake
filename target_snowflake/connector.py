@@ -90,6 +90,7 @@ class SnowflakeConnector(SQLConnector):
             for col_meta in columns
             if not column_names or col_meta["name"].casefold() in {col.casefold() for col in column_names}
         }
+        self.logger.info("parsed_columns: %s", parsed_columns)
         self.table_cache[full_table_name] = parsed_columns
         return parsed_columns
 
@@ -103,8 +104,6 @@ class SnowflakeConnector(SQLConnector):
 
         if isinstance(sql_type, sct.VARIANT):
             return VARIANT
-
-        print(sql_type)
 
         return sql_type
 
@@ -189,6 +188,8 @@ class SnowflakeConnector(SQLConnector):
         # column names so these will look like they dont exist yet.
         if '"' in formatter.format_collation(column_name):
             column_name = column_name.upper()
+
+        self.logger.info("prepare_column: %s - %s", column_name, sql_type)
 
         try:
             super().prepare_column(
@@ -310,8 +311,6 @@ class SnowflakeConnector(SQLConnector):
         # snowflake max and default varchar length
         # https://docs.snowflake.com/en/sql-reference/intro-summary-data-types.html
         maxlength = jsonschema_type.get("maxLength", SNOWFLAKE_MAX_STRING_LENGTH)
-        print(jsonschema_type)
-        print(target_type)
         # define type maps
         string_submaps = [
             TypeMap(eq, TIMESTAMP_NTZ(), "date-time"),
