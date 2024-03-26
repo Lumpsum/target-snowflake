@@ -104,6 +104,8 @@ class SnowflakeConnector(SQLConnector):
         if isinstance(sql_type, sct.VARIANT):
             return VARIANT
 
+        print(sql_type)
+
         return sql_type
 
     def get_sqlalchemy_url(self, config: dict) -> str:
@@ -308,6 +310,8 @@ class SnowflakeConnector(SQLConnector):
         # snowflake max and default varchar length
         # https://docs.snowflake.com/en/sql-reference/intro-summary-data-types.html
         maxlength = jsonschema_type.get("maxLength", SNOWFLAKE_MAX_STRING_LENGTH)
+        print(jsonschema_type)
+        print(target_type)
         # define type maps
         string_submaps = [
             TypeMap(eq, TIMESTAMP_NTZ(), "date-time"),
